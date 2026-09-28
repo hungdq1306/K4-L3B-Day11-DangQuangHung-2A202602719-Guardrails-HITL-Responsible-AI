@@ -86,62 +86,75 @@ class ConfidenceRouter:
         #      action="escalate", priority="high",
         #      requires_human=True, reason="Low confidence — escalating"
 
-        return RoutingDecision(
-            action="auto_send",
-            confidence=confidence,
-            reason="TODO: implement routing logic",
-            priority="low",
-            requires_human=False,
-        )  # TODO: Replace with implementation
+        if task_type in self.high_risk_tasks:
+            return RoutingDecision(
+                action="escalate",
+                confidence=confidence,
+                reason=f"High risk task type: {task_type}",
+                priority="critical",
+                requires_human=True,
+            )
+
+        if confidence >= 0.9:
+            return RoutingDecision(
+                action="auto_send",
+                confidence=confidence,
+                reason="High confidence — automated response",
+                priority="low",
+                requires_human=False,
+            )
+        elif confidence >= 0.7:
+            return RoutingDecision(
+                action="queue_review",
+                confidence=confidence,
+                reason="Medium confidence — needs review",
+                priority="normal",
+                requires_human=True,
+            )
+        else:
+            return RoutingDecision(
+                action="escalate",
+                confidence=confidence,
+                reason="Low confidence — escalating",
+                priority="high",
+                requires_human=True,
+            )
 
 
 # ============================================================
-# Optional enrichment: 3 HITL decision points (không chấm)
-# Không bắt buộc điền. Tóm tắt bài nộp: chạy scripts/grade.py
-# (tự sinh lab_report.md) — không viết report tay.
-#
-# For each decision point, define:
-# - trigger: What condition activates this HITL check?
-# - hitl_model: Which model? (human-in-the-loop, human-on-the-loop,
-#   human-as-tiebreaker)
-# - context_needed: What info does the human reviewer need?
-# - example: A concrete scenario
-# - approval_path: What approve/reject/timeout decision is recorded?
-# - audit_fields: Which correlation ID, intent and proposed action/diff are logged?
-#
-# Think about real banking scenarios where human judgment is critical.
+# Optional enrichment: 3 HITL decision points
 # ============================================================
 
 hitl_decision_points = [
     {
         "id": 1,
-        "name": "TODO: Name this decision point",
-        "trigger": "TODO: When does this trigger?",
-        "hitl_model": "TODO: human-in-the-loop / human-on-the-loop / human-as-tiebreaker",
-        "context_needed": "TODO: What does the reviewer need to see?",
-        "example": "TODO: Give a concrete example scenario",
-        "approval_path": "TODO: Explain approve, reject and timeout behavior",
-        "audit_fields": "TODO: List correlation ID, intent, diff and reviewer decision",
+        "name": "High-Value Wire Transfer Approval",
+        "trigger": "Transaction amount exceeds 100,000,000 VND or unusual beneficiary account",
+        "hitl_model": "human-in-the-loop",
+        "context_needed": "Source account, destination account, transaction history, customer risk score, device fingerprint",
+        "example": "Customer requests 500,000,000 VND wire transfer to a newly added offshore beneficiary",
+        "approval_path": "Approve: execute transaction via core banking API; Reject: cancel transfer and alert fraud team; Timeout: pause transfer and request OTP/call confirmation",
+        "audit_fields": "correlation_id, customer_id, proposed_action, transfer_amount, destination_iban, reviewer_id, timestamp",
     },
     {
         "id": 2,
-        "name": "TODO: Name this decision point",
-        "trigger": "TODO: When does this trigger?",
-        "hitl_model": "TODO: human-in-the-loop / human-on-the-loop / human-as-tiebreaker",
-        "context_needed": "TODO: What does the reviewer need to see?",
-        "example": "TODO: Give a concrete example scenario",
-        "approval_path": "TODO: Explain approve, reject and timeout behavior",
-        "audit_fields": "TODO: List correlation ID, intent, diff and reviewer decision",
+        "name": "Account Closure and Sensitive Profile Modification",
+        "trigger": "Request to close account, reset 2FA, or change registered national ID (CCCD)",
+        "hitl_model": "human-in-the-loop",
+        "context_needed": "Customer KYC records, photo ID comparison, reason for modification, account status",
+        "example": "Customer requests changing phone number and registered email while balance is >50M VND",
+        "approval_path": "Approve: update profile in CRM; Reject: retain current contact info; Timeout: escalate to branch officer callback",
+        "audit_fields": "correlation_id, customer_id, change_diff, verification_evidence, officer_decision, timestamp",
     },
     {
         "id": 3,
-        "name": "TODO: Name this decision point",
-        "trigger": "TODO: When does this trigger?",
-        "hitl_model": "TODO: human-in-the-loop / human-on-the-loop / human-as-tiebreaker",
-        "context_needed": "TODO: What does the reviewer need to see?",
-        "example": "TODO: Give a concrete example scenario",
-        "approval_path": "TODO: Explain approve, reject and timeout behavior",
-        "audit_fields": "TODO: List correlation ID, intent, diff and reviewer decision",
+        "name": "Disputed Credit Card Chargeback / Loan Modification",
+        "trigger": "Customer disputes transaction over 5,000,000 VND or requests loan restructuring",
+        "hitl_model": "human-on-the-loop",
+        "context_needed": "Merchant transaction log, customer dispute claim statement, past dispute rate",
+        "example": "Customer reports unrecognised international online transaction from merchant X",
+        "approval_path": "Approve: issue temporary credit and initiate chargeback; Reject: provide merchant proof of delivery; Timeout: hold in queue for supervisor review within 24h",
+        "audit_fields": "correlation_id, transaction_id, claim_details, merchant_code, reviewer_id, review_timestamp",
     },
 ]
 
